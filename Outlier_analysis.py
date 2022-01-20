@@ -1,42 +1,26 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import pandas as pd
 import numpy as np
 import matplotlib as plt
 from matplotlib.pyplot import figure
 import datetime
+import seaborn as sns
+import plotly.express as px
+
+
 
 get_ipython().run_line_magic('matplotlib', 'inline')
-import seaborn as sns
 pd.set_option('display.max_rows', None)
 
-
-# In[2]:
-
-
 get_ipython().system('pip install awswrangler')
-
-
-# In[3]:
-
 
 import sys
 get_ipython().system('{sys.executable} -m pip install PyAthena')
 
-
-# In[4]:
-
-
 import awswrangler as wr
 pd.options.mode.chained_assignment = None  # default='warn'
-
-
-# In[5]:
-
 
 from pyathena import connect
 from pyathena.pandas.cursor import PandasCursor
@@ -44,10 +28,6 @@ from pyathena.pandas.cursor import PandasCursor
 cursor = connect(s3_staging_dir='s3://remsage/',
             region_name='us-east-1',
                  cursor_class=PandasCursor).cursor()
-
-
-# In[6]:
-
 
 query = '''SELECT 
 event_type, 
@@ -60,42 +40,17 @@ d."openfda"."device_name",
 d."openfda"."device_class" 
 FROM "fda-open-database"."event" 
 cross join unnest(device) as t(d) WHERE UPPER(d."device_report_product_code") LIKE ('DZE') order by date_of_event desc'''
-
-
-# In[7]:
-
-
-df_event = cursor.execute(query.format()).as_pandas()
-
-
-# In[8]:
-
+df_event = cursor.execute(query).as_pandas()
 
 df_event['date_of_event']=pd.to_datetime(df_event['date_of_event'],format='%Y-%m-%d',errors='coerce')
 
-
-# In[9]:
-
-
 df_event.head(3)
 
-
-# In[10]:
-
-
 df = df_event[['event_type', 'manufacturer_d_name',"brand_name"]]
-
-
-# In[35]:
-
 
 temp=pd.DataFrame(df.value_counts()).reset_index()
 temp.rename(columns={'event_type': 'event_type', 'manufacturer_d_name': 'manufacturer_d_name',"brand_name":"brand_name",0: "count"}, inplace=True)
 temp=temp.sort_values("manufacturer_d_name",ascending=True)
-
-
-# In[14]:
-
 
 temp['normalized_percent'] = ''
 for i in range(len(temp)):
@@ -111,35 +66,16 @@ for i in range(len(temp)):
         temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[4])*100
 
 
-# In[ ]:
-
-
 temp = temp.sort_values("normalized_percent",ascending=False)
-temp
 
-
-# In[16]:
-
-
-import seaborn as sns
-import matplotlib as plt
-
-
-# In[ ]:
-
-
-import plotly.express as px
+#Box Plot for Manufacture-Brand Name for normalized event count by event_type
 fig = px.box(temp, x="event_type",y="normalized_percent",color="event_type",hover_name = "brand_name", title = "Box Plot of events for Manufacturer-Brand Name",log_y=True)
 fig.show()
 
 
-# In[18]:
-
-
 temp1=temp[['event_type',"normalized_percent"]]
-import numpy as np
 
-
+#normalizing by event_type
 #calculating lower and upper bounds for Death 
 df_quantile=temp1[temp.event_type=='Death']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
@@ -202,9 +138,6 @@ if lower_bound_n < 0:
 #print(iqr, upper_bound, lower_bound)
 
 
-# In[19]:
-
-
 outliers = pd.DataFrame()
 d = temp[temp.event_type == 'Death']
 d = d[(d.normalized_percent <lower_bound_d) | (d.normalized_percent > upper_bound_d)]
@@ -222,9 +155,6 @@ d = temp[temp.event_type == 'No answer provided']
 d = d[(d.normalized_percent <lower_bound_n) | (d.normalized_percent > upper_bound_n)]
 outliers = outliers.append(d)
 outliers.sort_values("normalized_percent", ascending = False)
-
-
-# In[ ]:
 
 
 d1 = pd.DataFrame()
@@ -246,35 +176,16 @@ d1 = d1.append(d)
 d1.sort_values("normalized_percent",ascending=False)
 
 
-# In[33]:
-
-
 # boxplot of data within the whisker
 fig = px.box(d1, x="event_type",y="normalized_percent",color="event_type",hover_name = "brand_name", title = "Box Plot of normalized for each event type for Manufacturer-Brand Name",log_y=True)
 fig.show()
 
-
-# In[22]:
-
-
+#normalizing with respect to total adverse event counts for a product code
 count_total = temp['count'].sum()
 count_total
 
-
-# In[24]:
-
-
 temp1 = temp
-
-
-# In[36]:
-
-
 temp1['normalized_percent'] = (temp['count']/count_total)*100
-
-
-# In[28]:
-
 
 #calculating lower and upper bounds for the box plot 
 temp2=temp1[['event_type',"normalized_percent"]]
@@ -289,18 +200,10 @@ if lower_bound < 0:
     lower_bound = 0
 print(lower_bound, upper_bound)
 
-
-# In[31]:
-
-
 # boxplot of data within the whisker
 arr2 = temp1[(temp1[['normalized_percent']].values >= lower_bound) & (temp1[['normalized_percent']].values <= upper_bound)]
 fig = px.box(arr2, x="event_type",y="normalized_percent",color="event_type",hover_name = "brand_name", title = "Box Plot of events normalized for Manufacturer-Brand Name", log_y=True)
 fig.show()
-
-
-# In[ ]:
-
 
 outlier_df = temp1[(temp1[['normalized_percent']].values < lower_bound) | (temp1[['normalized_percent']].values > upper_bound)]
 outlier_df.sort_values("normalized_percent",ascending=False)
