@@ -9,8 +9,6 @@ import datetime
 import seaborn as sns
 import plotly.express as px
 
-
-
 get_ipython().run_line_magic('matplotlib', 'inline')
 pd.set_option('display.max_rows', None)
 
@@ -55,15 +53,15 @@ temp=temp.sort_values("manufacturer_d_name",ascending=True)
 temp['normalized_percent'] = ''
 for i in range(len(temp)):
     if temp['event_type'][i] == 'Injury':
-        temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[0])*100
+        temp['normalized_percent'][i] = (temp['count'][i]/temp[temp.event_type=='Injury']['count'].sum())*100
     elif temp['event_type'][i] == 'Malfunction':
-        temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[1])*100
+        temp['normalized_percent'][i] = (temp['count'][i]/temp[temp.event_type=='Malfunction']['count'].sum())*100
     elif temp['event_type'][i] == 'Other':
-        temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[2])*100
+        temp['normalized_percent'][i] = (temp['count'][i]/temp[temp.event_type=='Other']['count'].sum())*100
     elif temp['event_type'][i] == 'No answer provided':
-        temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[3])*100
+        temp['normalized_percent'][i] = (temp['count'][i]/temp[temp.event_type=='No answer provided']['count'].sum())*100
     else:
-        temp['normalized_percent'][i] = (temp['count'][i]/temp['event_type'].value_counts()[4])*100
+        temp['normalized_percent'][i] = (temp['count'][i]/temp[temp.event_type=='Death']['count'].sum())*100
 
 
 temp = temp.sort_values("normalized_percent",ascending=False)
@@ -77,7 +75,7 @@ temp1=temp[['event_type',"normalized_percent"]]
 
 #normalizing by event_type
 #calculating lower and upper bounds for Death 
-df_quantile=temp1[temp.event_type=='Death']
+df_quantile=temp1[temp1.event_type=='Death']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
 q3 = np.quantile(df_quantile['normalized_percent'], 0.75)
 med = np.median(df_quantile['normalized_percent'])
@@ -89,7 +87,7 @@ if lower_bound_d < 0:
     lower_bound_d = 0
 
 #calculating lower and upper bounds for Malfunction 
-df_quantile=temp1[temp.event_type=='Malfunction']
+df_quantile=temp1[temp1.event_type=='Malfunction']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
 q3 = np.quantile(df_quantile['normalized_percent'], 0.75)
 med = np.median(df_quantile['normalized_percent'])
@@ -101,7 +99,7 @@ if lower_bound_m < 0:
     lower_bound_m = 0
 
 #calculating lower and upper bounds for Injury
-df_quantile=temp1[temp.event_type=='Injury']
+df_quantile=temp1[temp1.event_type=='Injury']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
 q3 = np.quantile(df_quantile['normalized_percent'], 0.75)
 med = np.median(df_quantile['normalized_percent'])
@@ -113,7 +111,7 @@ if lower_bound_i < 0:
     lower_bound_i = 0
 
 #calculating lower and upper bounds for Other 
-df_quantile=temp1[temp.event_type=='Other']
+df_quantile=temp1[temp1.event_type=='Other']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
 q3 = np.quantile(df_quantile['normalized_percent'], 0.75)
 med = np.median(df_quantile['normalized_percent'])
@@ -125,7 +123,7 @@ if lower_bound_o < 0:
     lower_bound_o = 0
 
 #calculating lower and upper bounds for No answer provided 
-df_quantile=temp1[temp.event_type=='No answer provided']
+df_quantile=temp1[temp1.event_type=='No answer provided']
 q1 = np.quantile(df_quantile['normalized_percent'].values, 0.25)
 q3 = np.quantile(df_quantile['normalized_percent'], 0.75)
 med = np.median(df_quantile['normalized_percent'])
@@ -154,6 +152,7 @@ outliers = outliers.append(d)
 d = temp[temp.event_type == 'No answer provided']
 d = d[(d.normalized_percent <lower_bound_n) | (d.normalized_percent > upper_bound_n)]
 outliers = outliers.append(d)
+outliers['outliers'] = True
 outliers.sort_values("normalized_percent", ascending = False)
 
 
@@ -173,25 +172,24 @@ d1 = d1.append(d)
 d = temp[temp.event_type == 'No answer provided']
 d = d[(d.normalized_percent >= lower_bound_n) & (d.normalized_percent <= upper_bound_n)]
 d1 = d1.append(d)
+d1['outliers'] = False
 d1.sort_values("normalized_percent",ascending=False)
 
-
-# boxplot of data within the whisker
-fig = px.box(d1, x="event_type",y="normalized_percent",color="event_type",hover_name = "brand_name", title = "Box Plot of normalized for each event type for Manufacturer-Brand Name",log_y=True)
-fig.show()
+event_norm = event_norm.append(outliers)
+event_norm = event_norm.append(d1)
+event_norm = event_norm.sort_values("normalized_percent", ascending = False)
 
 #normalizing with respect to total adverse event counts for a product code
 count_total = temp['count'].sum()
 count_total
 
-temp1 = temp
-temp1['normalized_percent'] = (temp['count']/count_total)*100
+temp['normalized_percent'] = (temp['count']/count_total)*100
 
 #calculating lower and upper bounds for the box plot 
-temp2=temp1[['event_type',"normalized_percent"]]
-q1 = np.quantile(temp2['normalized_percent'].values, 0.25)
-q3 = np.quantile(temp2['normalized_percent'], 0.75)
-med = np.median(temp2['normalized_percent'])
+temp1=temp[['event_type',"normalized_percent"]]
+q1 = np.quantile(temp1['normalized_percent'].values, 0.25)
+q3 = np.quantile(temp1['normalized_percent'], 0.75)
+med = np.median(temp1['normalized_percent'])
 
 iqr = q3-q1
 upper_bound = q3+(1.5*iqr)
@@ -200,12 +198,12 @@ if lower_bound < 0:
     lower_bound = 0
 print(lower_bound, upper_bound)
 
-# boxplot of data within the whisker
-arr2 = temp1[(temp1[['normalized_percent']].values >= lower_bound) & (temp1[['normalized_percent']].values <= upper_bound)]
-fig = px.box(arr2, x="event_type",y="normalized_percent",color="event_type",hover_name = "brand_name", title = "Box Plot of events normalized for Manufacturer-Brand Name", log_y=True)
-fig.show()
+arr2 = temp[(temp[['normalized_percent']].values >= lower_bound) & (temp[['normalized_percent']].values <= upper_bound)]
 
-outlier_df = temp1[(temp1[['normalized_percent']].values < lower_bound) | (temp1[['normalized_percent']].values > upper_bound)]
+outlier_df = temp[(temp[['normalized_percent']].values < lower_bound) | (temp[['normalized_percent']].values > upper_bound)]
 outlier_df.sort_values("normalized_percent",ascending=False)
     
+event_total = event_total.append(outlier_df)
+event_total = event_total.append(arr2)
+event_total = event_total.sort_values("normalized_percent", ascending = False)
 
